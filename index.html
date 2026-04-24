@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -995,6 +995,25 @@ body {
         <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="testSupabase()">Testar</button>
       </div>
     </div>
+
+    <!-- Geocoding / Cache -->
+    <div class="sidebar-section">
+      <h3>Geocodificação</h3>
+      <div id="geo-cache-status" style="font-size:11px; color:var(--muted); line-height:1.4;">
+        Cache: --
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px;">
+        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="exportGeocodeCache()">Exportar cache</button>
+        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="openImportGeocodeCache()">Importar</button>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px;">
+        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="clearGeocodeCache()">Limpar cache</button>
+      </div>
+      <div style="margin-top:8px; font-size:11px; color:var(--muted); line-height:1.4;">
+        Dica (GitHub Pages): commite um arquivo <span style="color:#00d4ff; font-family:var(--font-mono);">geocode_cache_seed.json</span> para carregar coordenadas precisas sem proxy.
+      </div>
+      <input id="geo-cache-import" type="file" accept="application/json" style="display:none" />
+    </div>
     <!-- Filters -->
     <div class="sidebar-section">
       <h3>Tipo de Ocorrência</h3>
@@ -1247,21 +1266,19 @@ body {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="config.js"></script>
+<script src="config.local.js"></script>
 <script>
-// Optional local config (kept out of git): load without console 404 spam
+// Optional private config: load only on localhost to avoid 404 noise on GitHub Pages.
 (function() {
   try {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'config.local.js?ts=' + Date.now(), false);
-    xhr.send(null);
-    if (xhr.status >= 200 && xhr.status < 300) {
-      (0, eval)(xhr.responseText);
-    } else {
-      window.__CONFIG_LOCAL_MISSING__ = true;
-    }
-  } catch (e) {
-    window.__CONFIG_LOCAL_MISSING__ = true;
-  }
+    var h = String(location.hostname || '').toLowerCase();
+    var isLocal = (h === 'localhost' || h === '127.0.0.1' || h === '::1');
+    if (!isLocal) return;
+    var s = document.createElement('script');
+    s.src = 'config.private.js?ts=' + Date.now();
+    s.onerror = function() { window.__CONFIG_PRIVATE_MISSING__ = true; };
+    document.head.appendChild(s);
+  } catch (e) {}
 })();
 </script>
 <script type="module" src="supabase-init.js"></script>
@@ -1270,6 +1287,15 @@ body {
 // ══════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════
+function isLocalhostEnv() {
+  try {
+    const h = String(location.hostname || '').toLowerCase();
+    return (h === 'localhost' || h === '127.0.0.1' || h === '::1');
+  } catch {
+    return false;
+  }
+}
+
 const BASE_TYPES = ['tiroteio','assalto','operacao','trafico','homicidio','sequestro'];
 
 const TYPE_CONFIG = {
@@ -1321,7 +1347,7 @@ const MOVI_ALERT_CONFIG = {
 // ══════════════════════════════════════════
 //  GEOCODING CONFIG (address -> lat/lng)
 // ══════════════════════════════════════════
-const GEO_CONFIG = {
+const __DEFAULT_GEO_CONFIG = {
   enabled: true,
   provider: 'nominatim',
   email: '', // opcional: recomenda-se um e-mail para o Nominatim
@@ -1329,14 +1355,19 @@ const GEO_CONFIG = {
   cityFallback: 'Rio de Janeiro, RJ, Brasil',
   rateMs: 1600, // limite para evitar bloqueio (1 req ~ 1.6s)
   maxPerSync: 60,
-  useProxyAuto: false,
-  tryDirect: true,
-  proxyUrls: [
-    'http://127.0.0.1:8787/proxy?url=',
-  ],
+  useProxyAuto: isLocalhostEnv(),
+  tryDirect: !isLocalhostEnv(),
+  proxyUrls: isLocalhostEnv() ? ['http://127.0.0.1:8787/proxy?url='] : [],
+  // For a pragmatic view, keep pins visible even without exact coords (place them within the zone/region).
+  // You can override via window.APP_CONFIG.geo.fallbackToZone.
   fallbackToZone: true,
   cacheKey: 'geocode_cache_v1',
 };
+const GEO_CONFIG = Object.assign({}, __DEFAULT_GEO_CONFIG, (window.APP_CONFIG && window.APP_CONFIG.geo) ? window.APP_CONFIG.geo : {});
+if (!isLocalhostEnv() && Array.isArray(GEO_CONFIG.proxyUrls) && GEO_CONFIG.proxyUrls.length > 0) {
+  GEO_CONFIG.useProxyAuto = true;
+  GEO_CONFIG.tryDirect = false;
+}
 
 // ══════════════════════════════════════════
 //  SUPABASE (optional)
@@ -1481,11 +1512,11 @@ function updateSupabaseStatus() {
   const enabled = !!(SUPABASE_CFG && SUPABASE_CFG.enabled);
   const hasClient = !!getSupabaseClient();
   const initErr = window.SUPABASE_INIT_ERROR;
-  const cfgMissing = !!window.__CONFIG_LOCAL_MISSING__;
+  const privateMissing = !!window.__CONFIG_PRIVATE_MISSING__;
 
   if (!enabled) {
-    el.textContent = cfgMissing
-      ? 'Status: desativado (crie config.local.js a partir do config.local.example.js)'
+    el.textContent = privateMissing
+      ? 'Status: desativado (edite config.local.js ou crie config.private.js)'
       : 'Status: desativado (edite config.local.js)';
     return;
   }
@@ -2677,8 +2708,28 @@ function normalizeZone(str) {
   if (s.includes('zona sul') || s.includes('sul')) return 'sul';
   if (s.includes('zona oeste') || s.includes('oeste')) return 'oeste';
   if (s.includes('centro')) return 'centro';
-  if (s.includes('baixada')) return 'baixada';
-  if (s.includes('niteroi') || s.includes('niterói')) return 'niteroi';
+  if (s.includes('baixada') || s.includes('baixada fluminense')) return 'baixada';
+  if (s.includes('niteroi') || s.includes('niteroi') || s.includes('regiao metropolitana')) return 'niteroi';
+
+  // Heuristics by município/bairro (avoid pinning Baixada in "Centro")
+  if (
+    s.includes('duque de caxias') ||
+    s.includes('nova iguacu') ||
+    s.includes('belford roxo') ||
+    s.includes('sao joao de meriti') ||
+    s.includes('nilopolis') ||
+    s.includes('mesquita') ||
+    s.includes('queimados') ||
+    s.includes('japeri') ||
+    s.includes('itaguai') ||
+    s.includes('seropedica') ||
+    s.includes('paracambi') ||
+    s.includes('mage') ||
+    s.includes('saracuruna')
+  ) return 'baixada';
+
+  if (s.includes('sao goncalo')) return 'sao_goncalo';
+  if (s.includes('niteroi')) return 'niteroi';
   return 'default';
 }
 
@@ -2687,10 +2738,71 @@ const ZONE_CENTERS = {
   sul:     [-22.970, -43.190],
   oeste:   [-22.920, -43.450],
   centro:  [-22.905, -43.180],
-  baixada: [-22.750, -43.360],
+  // Rough Baixada Fluminense cluster center (Duque de Caxias/Nova Iguaçu/Belford Roxo)
+  baixada: [-22.780, -43.310],
   niteroi: [-22.880, -43.100],
+  sao_goncalo: [-22.826, -43.053],
   default: [-22.9068, -43.1729],
 };
+
+// Very loose sanity bounds (used to detect obviously wrong geocoded points).
+// If a record has lat/lng but they fall far outside its inferred zone, we ignore them and fallback to zone center.
+const ZONE_BOUNDS = {
+  norte:      { minLat: -23.05, maxLat: -22.70, minLng: -43.55, maxLng: -43.05 },
+  sul:        { minLat: -23.15, maxLat: -22.86, minLng: -43.55, maxLng: -43.05 },
+  oeste:      { minLat: -23.15, maxLat: -22.70, minLng: -44.10, maxLng: -43.15 },
+  centro:     { minLat: -23.05, maxLat: -22.82, minLng: -43.35, maxLng: -43.05 },
+  baixada:    { minLat: -23.20, maxLat: -22.50, minLng: -44.10, maxLng: -42.85 },
+  niteroi:    { minLat: -23.10, maxLat: -22.70, minLng: -43.30, maxLng: -42.85 },
+  sao_goncalo:{ minLat: -23.05, maxLat: -22.65, minLng: -43.30, maxLng: -42.85 },
+};
+
+function normalizePlaceKey(str) {
+  return String(str || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const MUNICIPIO_CENTERS = {
+  // Municipality centers for better "right region" fallback when lat/lng is missing.
+  // (approximate, used only when we don't have coordinates)
+  'rio de janeiro': [-22.9068, -43.1729],
+  'duque de caxias': [-22.785, -43.310],
+  'nova iguacu': [-22.759, -43.451],
+  'belford roxo': [-22.764, -43.399],
+  'sao joao de meriti': [-22.805, -43.372],
+  'nilopolis': [-22.807, -43.414],
+  'mesquita': [-22.783, -43.432],
+  'queimados': [-22.716, -43.554],
+  'japeri': [-22.645, -43.660],
+  'itaguai': [-22.852, -43.776],
+  'seropedica': [-22.743, -43.707],
+  'paracambi': [-22.607, -43.710],
+  'mage': [-22.651, -43.040],
+  'niteroi': [-22.883, -43.103],
+  'sao goncalo': [-22.826, -43.053],
+};
+
+function inferZoneKeyFromOc(oc) {
+  const parts = [
+    oc && oc.zona,
+    oc && oc.grupo,
+    oc && oc.municipio,
+    oc && oc.bairro,
+    oc && oc.placeHint,
+    oc && oc.local,
+  ].filter(Boolean).join(' ');
+  return normalizeZone(parts);
+}
+
+function isLatLngInBounds(lat, lng, b) {
+  if (!b) return true;
+  return lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng;
+}
 
 function hashCode(str) {
   let h = 0;
@@ -2750,23 +2862,53 @@ function isOcComplete(oc) {
   return !oc || oc._source !== 'sheets' || oc._complete === true;
 }
 
-function jitterLatLng(base, seed) {
+function jitterLatLng(base, seed, scaleLat = 0.012, scaleLng = 0.016) {
   const h = hashCode(seed);
   const r1 = ((h & 0xffff) / 0xffff) * 2 - 1;
   const r2 = (((h >> 16) & 0xffff) / 0xffff) * 2 - 1;
-  const lat = base[0] + r1 * 0.015;
-  const lng = base[1] + r2 * 0.02;
+  const lat = base[0] + r1 * scaleLat;
+  const lng = base[1] + r2 * scaleLng;
   return [lat, lng];
 }
 
+function inferFallbackCenterFromOc(oc) {
+  if (!oc) return { center: ZONE_CENTERS.default, kind: 'default' };
+
+  // Prefer inferred zone from any available hint (zona/grupo/bairro/local/placeHint).
+  // This avoids misplacing items when MUNICÍPIO is generic like "Rio de Janeiro".
+  const zoneKey = inferZoneKeyFromOc(oc);
+  if (zoneKey && zoneKey !== 'default') {
+    return { center: ZONE_CENTERS[zoneKey] || ZONE_CENTERS.default, kind: 'zona' };
+  }
+
+  const municipioKey = normalizePlaceKey(oc.municipio || '');
+  if (municipioKey && MUNICIPIO_CENTERS[municipioKey]) {
+    return { center: MUNICIPIO_CENTERS[municipioKey], kind: 'municipio' };
+  }
+
+  return { center: ZONE_CENTERS.default, kind: 'default' };
+}
+
 function getOcLatLng(oc) {
-  if (oc && Number.isFinite(oc.lat) && Number.isFinite(oc.lng)) return [oc.lat, oc.lng];
+  if (oc && Number.isFinite(oc.lat) && Number.isFinite(oc.lng)) {
+    const zoneKey = inferZoneKeyFromOc(oc);
+    const b = zoneKey && zoneKey !== 'default' ? ZONE_BOUNDS[zoneKey] : null;
+    if (!b || isLatLngInBounds(oc.lat, oc.lng, b)) {
+      return [oc.lat, oc.lng];
+    }
+    // If coords are clearly out of the expected zone, treat as missing and fallback.
+  }
   const addr = buildAddressFromOc(oc);
   if (addr && !GEO_CONFIG.fallbackToZone) return null; // evita "flutuar" quando há endereço mas ainda sem geocodificação
-  const zoneKey = normalizeZone(oc.zona || oc.grupo || '');
-  const base = ZONE_CENTERS[zoneKey] || ZONE_CENTERS.default;
+  const fb = inferFallbackCenterFromOc(oc);
+  const base = fb.center || ZONE_CENTERS.default;
   const seed = `${oc.local || ''}|${oc.data || ''}|${oc.tipo || ''}|${oc.fonte || ''}`;
-  return jitterLatLng(base, seed);
+  // Municipality fallback should jitter less; zone fallback can jitter a bit more.
+  const scale =
+    fb.kind === 'municipio' ? { lat: 0.008, lng: 0.010 } :
+    fb.kind === 'zona' ? { lat: 0.012, lng: 0.016 } :
+    { lat: 0.010, lng: 0.013 };
+  return jitterLatLng(base, seed, scale.lat, scale.lng);
 }
 
 function normalizeDateToPt(dateStr) {
@@ -2973,6 +3115,27 @@ function getField(row, keys) {
   return '';
 }
 
+function extractPlaceHintFromTitle(title) {
+  let s = String(title || '').trim();
+  if (!s) return '';
+  s = s.replace(/\s+/g, ' ').trim();
+
+  // Common Portuguese patterns: "Tiros em X", "Tiros no X", "Assalto na X", etc.
+  s = s.replace(/^(tiros?|confronto|assalto|roubo|operacao|operação|homicidio|homicídio|sequestro)\s+(?:em|no|na|nos|nas)\s+/i, '');
+
+  const m = s.match(/\b(?:em|no|na|nos|nas)\s+(.+)$/i);
+  if (m && m[1]) s = String(m[1]).trim();
+
+  // Remove trailing noise like "(...)" and separators.
+  s = s.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+  s = s.split('·')[0].trim();
+  s = s.replace(/\s{2,}/g, ' ').trim();
+
+  if (s.length < 3 || s.length > 120) return '';
+  if (/^rio de janeiro$/i.test(s)) return '';
+  return s;
+}
+
 function mapRowFromSheet(row) {
   const categoria = getField(row, ['categoria']);
   const titulo = getField(row, ['titulo', 'título']);
@@ -2986,13 +3149,20 @@ function mapRowFromSheet(row) {
   const fonte = getField(row, ['fonte']);
   const link = getField(row, ['link']);
   const operador = getField(row, ['operador']);
+  const latStr = getField(row, ['latitude', 'lat', 'y', 'lat_y']);
+  const lngStr = getField(row, ['longitude', 'lng', 'lon', 'x', 'long_x']);
 
   const tipo = normalizeTipo(categoria, true);
   if (!tipo) return null;
 
-  const local = bairro ? (municipio ? `${bairro} - ${municipio}` : bairro) : (municipio || '');
+  const placeHint = extractPlaceHintFromTitle(titulo);
+  const local = placeHint || (bairro ? (municipio ? `${bairro} - ${municipio}` : bairro) : (municipio || ''));
   const enderecoBase = [endereco, bairro, municipio].filter(Boolean).join(', ');
   const descricao = [titulo, link].filter(Boolean).join(' · ');
+
+  let lat = parseNumberLoose(latStr);
+  let lng = parseNumberLoose(lngStr);
+  ({ lat, lng } = normalizeLatLngPair(lat, lng));
 
   return {
     tipo,
@@ -3001,9 +3171,10 @@ function mapRowFromSheet(row) {
     endereco: endereco || '',
     bairro: bairro || '',
     municipio: municipio || '',
+    placeHint: placeHint || '',
     address: enderecoBase || local,
-    lat: null,
-    lng: null,
+    lat: isNaN(lat) ? null : lat,
+    lng: isNaN(lng) ? null : lng,
     data,
     hora: '',
     grupo: regiao,
@@ -3088,8 +3259,10 @@ function buildAddressFromOc(oc) {
   const bairro = String(oc.bairro || '').trim();
   const municipio = String(oc.municipio || '').trim();
   const local = String(oc.local || '').trim();
+  const placeHint = String(oc.placeHint || '').trim();
   const parts = [];
   if (endereco) parts.push(endereco);
+  if (placeHint && !local.toLowerCase().includes(placeHint.toLowerCase())) parts.push(placeHint);
   if (bairro && !local.toLowerCase().includes(bairro.toLowerCase())) parts.push(bairro);
   if (municipio && !local.toLowerCase().includes(municipio.toLowerCase())) parts.push(municipio);
   if (!endereco && local) parts.push(local);
@@ -3115,6 +3288,135 @@ function saveGeocodeCache(cache) {
   try {
     localStorage.setItem(GEO_CONFIG.cacheKey, JSON.stringify(cache || {}));
   } catch (e) {}
+}
+
+function countGeocodeCacheEntries(cache) {
+  if (!cache || typeof cache !== 'object') return 0;
+  let n = 0;
+  for (const k of Object.keys(cache)) {
+    const v = cache[k];
+    if (!v) continue;
+    const lat = Number(v.lat);
+    const lng = Number(v.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) n++;
+  }
+  return n;
+}
+
+function updateGeocodeCacheStatus() {
+  const el = document.getElementById('geo-cache-status');
+  if (!el) return;
+  const cache = loadGeocodeCache();
+  const n = countGeocodeCacheEntries(cache);
+  const mode = isLocalhostEnv() ? 'local' : 'produção';
+  el.textContent = `Cache: ${n.toLocaleString('pt-BR')} endereços (${mode})`;
+}
+
+function mergeGeocodeCache(base, incoming) {
+  const out = Object.assign({}, base || {});
+  let added = 0;
+  let updated = 0;
+  if (!incoming || typeof incoming !== 'object') return { out, added, updated };
+
+  for (const k of Object.keys(incoming)) {
+    const v = incoming[k];
+    if (!v) continue;
+    const lat = Number(v.lat);
+    const lng = Number(v.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+    const prev = out[k];
+    const prevTs = prev && Number.isFinite(Number(prev.ts)) ? Number(prev.ts) : 0;
+    const nextTs = Number.isFinite(Number(v.ts)) ? Number(v.ts) : Date.now();
+
+    if (!prev) {
+      out[k] = { lat, lng, ts: nextTs };
+      added++;
+      continue;
+    }
+    const prevLat = Number(prev.lat);
+    const prevLng = Number(prev.lng);
+    const prevValid = Number.isFinite(prevLat) && Number.isFinite(prevLng);
+    if (!prevValid || nextTs >= prevTs) {
+      out[k] = { lat, lng, ts: nextTs };
+      updated++;
+    }
+  }
+  return { out, added, updated };
+}
+
+async function tryLoadSeedGeocodeCache() {
+  try {
+    if (location.protocol === 'file:') return;
+
+    const seedName = 'geocode_cache_seed.json';
+    const res = await fetch(seedName, { cache: 'no-store' });
+    if (!res.ok) return;
+    const incoming = await res.json();
+
+    const current = loadGeocodeCache();
+    const merged = mergeGeocodeCache(current, incoming);
+    if ((merged.added + merged.updated) > 0) {
+      saveGeocodeCache(merged.out);
+      showNotif(`📍 Cache seed carregado: +${merged.added} / ~${merged.updated}`, 3500, '#00d4ff');
+    }
+  } catch (e) {
+    // silent: optional feature
+  } finally {
+    updateGeocodeCacheStatus();
+  }
+}
+
+function downloadJson(filename, obj) {
+  try {
+    const blob = new Blob([JSON.stringify(obj || {}, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (_) {} }, 1000);
+  } catch (e) {
+    showNotif('⚠️ Falha ao exportar cache (ver console)', 3500, '#ffd700');
+    try { console.error(e); } catch (_) {}
+  }
+}
+
+function exportGeocodeCache() {
+  const cache = loadGeocodeCache();
+  downloadJson('geocode_cache_seed.json', cache);
+  showNotif('📦 Cache exportado: geocode_cache_seed.json', 2500, '#00d4ff');
+}
+
+function openImportGeocodeCache() {
+  const input = document.getElementById('geo-cache-import');
+  if (!input) return;
+  input.value = '';
+  input.click();
+}
+
+async function importGeocodeCacheFromFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const incoming = JSON.parse(text);
+    const current = loadGeocodeCache();
+    const merged = mergeGeocodeCache(current, incoming);
+    saveGeocodeCache(merged.out);
+    updateGeocodeCacheStatus();
+    renderOcorrencias();
+    showNotif(`✅ Cache importado: +${merged.added} / ~${merged.updated}`, 3500, '#00ff9d');
+  } catch (e) {
+    showNotif('⚠️ JSON inválido no arquivo de cache', 3500, '#ffd700');
+  }
+}
+
+function clearGeocodeCache() {
+  try { localStorage.removeItem(GEO_CONFIG.cacheKey); } catch (_) {}
+  updateGeocodeCacheStatus();
+  renderOcorrencias();
+  showNotif('🧹 Cache de geocodificação limpo', 2500, '#00d4ff');
 }
 
 async function geocodeAddress(addr) {
@@ -3177,7 +3479,10 @@ async function geocodeAddress(addr) {
   }
   if (!geoWarned) {
     geoWarned = true;
-    showNotif('⚠️ Geocodificação bloqueada por CORS. Inicie o proxy local: node geocode-proxy.js (porta 8787).', 6500, '#ffd700');
+    const hint = isLocalhostEnv()
+      ? 'Inicie o proxy local: node geocode-proxy.js (porta 8787).'
+      : 'Em produção (GitHub), configure um proxy CORS em window.APP_CONFIG.geo.proxyUrls.';
+    showNotif(`⚠️ Geocodificação bloqueada por CORS. ${hint}`, 7500, '#ffd700');
   }
   return null;
 }
@@ -3222,6 +3527,7 @@ async function geocodeOcorrencias(list) {
     }
     if (updated > 0) {
       saveGeocodeCache(cache);
+      updateGeocodeCacheStatus();
       renderOcorrencias();
       showNotif(`✅ ${updated} endereços geocodificados`, 2500);
     }
@@ -3235,20 +3541,12 @@ function setOcorrenciasFromSheet(rows, headers = []) {
   let any = 0;
   let latestDate = null;
   const geoCache = loadGeocodeCache();
-  const isRowComplete = (row) => {
-    const cols = (headers && headers.length) ? headers : Object.keys(row || {});
-    for (const h of cols) {
-      if (!String(h || '').trim()) continue;
-      const v = row[h];
-      if (v === undefined || v === null || String(v).trim() === '') return false;
-    }
-    return true;
-  };
   rows.forEach((row, i) => {
     const oc = mapRowFromSheet(row) || mapRowGeneric(row);
     if (!oc) return;
     oc.data = normalizeDateToPt(oc.data);
-    oc._complete = isRowComplete(row);
+    // Treat sheets rows as complete once mapped; empty optional columns should not hide pins.
+    oc._complete = true;
     if (!(Number.isFinite(oc.lat) && Number.isFinite(oc.lng))) {
       const addr = buildAddressFromOc(oc);
       const key = normalizeAddressKey(addr);
@@ -3547,25 +3845,42 @@ function restoreData() {
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
-initRegions();
-initDateFilter();
-updateSupabaseStatus();
-// Default: show only today's occurrences to keep initial load light
-setFilterToday();
-const sheetsEnabled = (SHEETS_CONFIG.apiKey && SHEETS_CONFIG.sheetId) || SHEETS_CONFIG.csvUrl;
-if (sheetsEnabled) {
-  loadSheetData();
-  if (SHEETS_CONFIG.refreshMs > 0) {
-    setInterval(loadSheetData, SHEETS_CONFIG.refreshMs);
+(function attachGeoCacheImportHandler() {
+  const input = document.getElementById('geo-cache-import');
+  if (!input) return;
+  input.addEventListener('change', () => {
+    const f = input.files && input.files[0] ? input.files[0] : null;
+    if (!f) return;
+    importGeocodeCacheFromFile(f);
+  });
+})();
+
+(async function initApp() {
+  await tryLoadSeedGeocodeCache();
+
+  initRegions();
+  initDateFilter();
+  updateSupabaseStatus();
+  updateGeocodeCacheStatus();
+
+  // Default: show only today's occurrences to keep initial load light
+  setFilterToday();
+
+  const sheetsEnabled = (SHEETS_CONFIG.apiKey && SHEETS_CONFIG.sheetId) || SHEETS_CONFIG.csvUrl;
+  if (sheetsEnabled) {
+    loadSheetData();
+    if (SHEETS_CONFIG.refreshMs > 0) {
+      setInterval(loadSheetData, SHEETS_CONFIG.refreshMs);
+    }
+  } else {
+    restoreData();
   }
-} else {
-  restoreData();
-}
-startMoviAlerts();
-// Optional: Supabase bootstrap (merge remote -> local)
-if (!sheetsEnabled) {
-  scheduleSupabaseBootstrap();
-}
+  startMoviAlerts();
+  // Optional: Supabase bootstrap (merge remote -> local)
+  if (!sheetsEnabled) {
+    scheduleSupabaseBootstrap();
+  }
+})();
 
 // Demo data for preview if empty
 setTimeout(() => {
