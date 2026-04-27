@@ -649,7 +649,8 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  width: 520px;
+  width: 660px;
+  max-width: 96vw;
   max-height: 90vh;
   overflow-y: auto;
   padding: 24px;
@@ -672,6 +673,36 @@ body {
   gap: 8px;
   align-items: center;
 }
+
+.route-input {
+  padding: 12px 14px !important;
+  font-size: 15px !important;
+}
+
+/* ── AUTOCOMPLETE ── */
+.form-group.autocomplete { position: relative; }
+.ac-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.6);
+  z-index: 2200;
+}
+.ac-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 12px;
+  color: var(--text);
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover, .ac-item.active { background: rgba(0,212,255,0.08); }
+.ac-muted { color: var(--muted); font-size: 11px; padding: 10px 12px; }
 
 .route-actions {
   display: flex;
@@ -783,6 +814,60 @@ body {
   border-color: var(--accent);
 }
 
+/* ── ROUTE ALERTS ── */
+#route-alerts {
+  position: absolute;
+  top: 56px;
+  left: 12px;
+  z-index: 805;
+  width: 420px;
+  max-width: calc(100% - 24px);
+  background: rgba(13,17,23,0.96);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+  overflow: hidden;
+}
+#route-alerts .ra-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+#route-alerts .ra-title {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+}
+#route-alerts .ra-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+#route-alerts .ra-close:hover { color: var(--text); border-color: var(--text); }
+#route-alerts .ra-body { max-height: 260px; overflow: auto; }
+#route-alerts .ra-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+}
+#route-alerts .ra-item:last-child { border-bottom: none; }
+#route-alerts .ra-item:hover { background: rgba(0,212,255,0.06); }
+#route-alerts .ra-ic { width: 22px; text-align: center; }
+#route-alerts .ra-main { flex: 1; }
+#route-alerts .ra-line1 { font-family: var(--font-ui); font-weight: 700; font-size: 12px; }
+#route-alerts .ra-line2 { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
 /* ── NOTIFICATIONS ── */
 #notif-container {
   position: fixed;
@@ -879,6 +964,13 @@ body {
 
 .custom-pin.pin-critical {
   animation: pin-float 3.6s ease-in-out infinite, pulse-pin 1.5s infinite;
+}
+
+.custom-pin.pin-route-near {
+  outline: 2px solid #ffd700;
+  outline-offset: 2px;
+  box-shadow: 0 0 14px rgba(255,215,0,0.65), 0 0 24px rgba(255,107,53,0.35);
+  animation: pin-float 3.6s ease-in-out infinite, pulse-pin 1.2s infinite;
 }
 
 /* HEATMAP-like region hover */
@@ -985,35 +1077,7 @@ body {
     </div>
 
     <!-- Supabase -->
-    <div class="sidebar-section">
-      <h3>Supabase</h3>
-      <div id="supabase-status" style="font-size:11px; color:var(--muted); line-height:1.4;">
-        Status: --
-      </div>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="connectSupabase()">Instruções</button>
-        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="testSupabase()">Testar</button>
-      </div>
-    </div>
-
-    <!-- Geocoding / Cache -->
-    <div class="sidebar-section">
-      <h3>Geocodificação</h3>
-      <div id="geo-cache-status" style="font-size:11px; color:var(--muted); line-height:1.4;">
-        Cache: --
-      </div>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="exportGeocodeCache()">Exportar cache</button>
-        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="openImportGeocodeCache()">Importar</button>
-      </div>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <button class="btn btn-ghost" style="flex:1; font-size:11px;" onclick="clearGeocodeCache()">Limpar cache</button>
-      </div>
-      <div style="margin-top:8px; font-size:11px; color:var(--muted); line-height:1.4;">
-        Dica (GitHub Pages): commite um arquivo <span style="color:#00d4ff; font-family:var(--font-mono);">geocode_cache_seed.json</span> para carregar coordenadas precisas sem proxy.
-      </div>
-      <input id="geo-cache-import" type="file" accept="application/json" style="display:none" />
-    </div>
+    <!-- (Supabase + Geocodificação removidos do menu para ganhar espaço nas categorias) -->
     <!-- Filters -->
     <div class="sidebar-section">
       <h3>Tipo de Ocorrência</h3>
@@ -1077,8 +1141,10 @@ body {
       <button class="map-btn" onclick="setView('norte')">Zona Norte</button>
       <button class="map-btn" onclick="setView('sul')">Zona Sul</button>
       <button class="map-btn" onclick="setView('oeste')">Zona Oeste</button>
+      <button class="map-btn" id="btn-map-theme" onclick="toggleMapTheme()">Mapa Claro</button>
       <button class="map-btn" onclick="openDashboard()">Dashboard</button>
     </div>
+    <div id="route-alerts" style="display:none;"></div>
     <div id="map"></div>
     <button id="fab-add" onclick="openRouteModal()" title="Criar rota">+</button>
   </div>
@@ -1224,20 +1290,20 @@ body {
   <div id="route-modal" onclick="event.stopPropagation()">
     <h2>🧭 Criar Rota</h2>
 
-    <div class="form-group">
+    <div class="form-group autocomplete">
       <label>Ponto A</label>
-      <input type="text" id="route-a" placeholder="Ex: Copacabana, RJ ou -22.97,-43.19">
+      <input type="text" id="route-a" class="route-input" placeholder="Ex: Copacabana, RJ · Galeão · Maracanã · Av. Brasil · -22.97,-43.19">
     </div>
 
-    <div class="form-group">
+    <div class="form-group autocomplete">
       <label>Ponto B</label>
-      <input type="text" id="route-b" placeholder="Ex: Maracanã, RJ ou -22.91,-43.23">
+      <input type="text" id="route-b" class="route-input" placeholder="Ex: Niterói, RJ · Santos Dumont · Barra da Tijuca · -22.91,-43.23">
     </div>
 
-    <div class="form-group">
+    <div class="form-group autocomplete">
       <label>Desvios</label>
       <div class="route-inline">
-        <input type="text" id="route-waypoint-input" placeholder="Digite uma localidade para desvio">
+        <input type="text" id="route-waypoint-input" class="route-input" placeholder="Digite um local (rua, município, entidade, aeroporto, estádio...)">
         <button class="btn btn-ghost" style="font-size:11px;" onclick="addRouteWaypointFromInput()">Adicionar</button>
       </div>
       <div class="route-actions">
@@ -1246,7 +1312,7 @@ body {
       </div>
       <div class="route-waypoints" id="route-waypoints"></div>
       <div id="route-hint" style="margin-top:8px; font-size:11px; color:var(--muted);">
-        Clique em “Adicionar no mapa” e depois clique no mapa para inserir um desvio.
+        Sugestões aparecem conforme você digita. Clique em “Adicionar no mapa” e depois clique no mapa para inserir um desvio.
       </div>
       <div style="margin-top:6px; font-size:11px; color:var(--muted);">
         Rota estimada por serviço gratuito (sem trânsito ao vivo).
@@ -1567,6 +1633,8 @@ let routeWaypoints = [];
 let routeMapMode = false;
 let routeLayer = null;
 let routeMarkerGroup = null;
+let currentRouteGeometry = null;
+let routeNearbyMarkers = [];
 let isGeocoding = false;
 let geoWarned = false;
 let geoProxySkipUntil = new Map();
@@ -1582,12 +1650,36 @@ const map = L.map('map', {
   zoomControl: true,
 });
 
-// Dark tile layer
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+// Base layers (dark/light)
+let mapTheme = 'dark';
+const baseLayerDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '© OpenStreetMap © CARTO',
   subdomains: 'abcd',
   maxZoom: 19
-}).addTo(map);
+});
+const baseLayerLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO',
+  subdomains: 'abcd',
+  maxZoom: 19
+});
+baseLayerDark.addTo(map);
+
+function applyMapTheme(next) {
+  const theme = next === 'light' ? 'light' : 'dark';
+  mapTheme = theme;
+  try { map.removeLayer(baseLayerDark); } catch (_) {}
+  try { map.removeLayer(baseLayerLight); } catch (_) {}
+  (mapTheme === 'light' ? baseLayerLight : baseLayerDark).addTo(map);
+  const btn = document.getElementById('btn-map-theme');
+  if (btn) {
+    btn.textContent = mapTheme === 'light' ? 'Mapa Escuro' : 'Mapa Claro';
+    btn.classList.toggle('active', mapTheme === 'light');
+  }
+}
+
+function toggleMapTheme() {
+  applyMapTheme(mapTheme === 'light' ? 'dark' : 'light');
+}
 
 // Ensure correct sizing after initial layout
 window.addEventListener('load', () => {
@@ -1754,6 +1846,7 @@ function createPin(oc) {
   `);
 
   marker._ocType = oc.tipo;
+  marker._oc = oc;
   return marker;
 }
 
@@ -1862,6 +1955,12 @@ function renderOcorrencias() {
   });
   listEl.appendChild(frag);
   scheduleDashboardRender();
+
+  if (currentRouteGeometry) {
+    setTimeout(() => updateRouteProximityAlerts(), 0);
+  } else {
+    clearRouteProximityAlerts();
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1983,8 +2082,20 @@ function addRouteWaypointFromInput() {
     showNotif('⚠️ Digite um desvio para adicionar', 2000, '#ffd700');
     return;
   }
-  routeWaypoints.push({ label: val, lat: null, lng: null, source: 'text' });
-  if (input) input.value = '';
+
+  const lat = input ? Number(input.dataset.acLat) : NaN;
+  const lng = input ? Number(input.dataset.acLng) : NaN;
+  const label = input ? String(input.dataset.acLabel || '').trim() : '';
+  if (Number.isFinite(lat) && Number.isFinite(lng) && label && label === val) {
+    routeWaypoints.push({ label: val, lat, lng, source: 'suggestion' });
+  } else {
+    routeWaypoints.push({ label: val, lat: null, lng: null, source: 'text' });
+  }
+
+  if (input) {
+    input.value = '';
+    clearPlaceDataset(input);
+  }
   renderWaypointList();
 }
 
@@ -2033,20 +2144,233 @@ function parseLatLng(text) {
   return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
 }
 
+// ══════════════════════════════════════════
+//  PLACE SEARCH + AUTOCOMPLETE (Nominatim)
+// ══════════════════════════════════════════
+const placeSuggestCache = new Map(); // key -> { ts, items }
+
+function cacheGetPlaces(key, maxAgeMs = 60000) {
+  const it = placeSuggestCache.get(key);
+  if (!it) return null;
+  if (Date.now() - it.ts > maxAgeMs) return null;
+  return Array.isArray(it.items) ? it.items : null;
+}
+
+function cacheSetPlaces(key, items) {
+  placeSuggestCache.set(key, { ts: Date.now(), items: items || [] });
+}
+
+async function searchPlaces(query, limit = 6) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+
+  const cached = cacheGetPlaces(`${q}::${limit}`);
+  if (cached) return cached;
+
+  const attempts = [q];
+  if (!/brasil|brazil/i.test(q)) attempts.push(`${q}, Brasil`);
+
+  for (const attempt of attempts) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=${limit}&q=${encodeURIComponent(attempt)}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
+    const json = await res.json();
+    if (Array.isArray(json) && json.length > 0) {
+      const items = json.map((r) => ({
+        lat: parseFloat(r.lat),
+        lng: parseFloat(r.lon),
+        label: r.display_name
+      })).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.label);
+      cacheSetPlaces(`${q}::${limit}`, items);
+      return items;
+    }
+  }
+
+  cacheSetPlaces(`${q}::${limit}`, []);
+  return [];
+}
+
+function clearPlaceDataset(input) {
+  if (!input) return;
+  delete input.dataset.acLat;
+  delete input.dataset.acLng;
+  delete input.dataset.acLabel;
+}
+
+function setPlaceDataset(input, place) {
+  if (!input || !place) return;
+  input.dataset.acLat = String(place.lat);
+  input.dataset.acLng = String(place.lng);
+  input.dataset.acLabel = String(place.label || input.value || '').trim();
+}
+
+function ensureAutocompleteMenu(input) {
+  const host = input && input.closest ? input.closest('.form-group') : null;
+  if (!host) return null;
+  let menu = host.querySelector('.ac-menu');
+  if (menu) return menu;
+  menu = document.createElement('div');
+  menu.className = 'ac-menu';
+  menu.style.display = 'none';
+  host.appendChild(menu);
+  return menu;
+}
+
+function attachPlaceAutocomplete(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const menu = ensureAutocompleteMenu(input);
+  if (!menu) return;
+
+  let debounceTimer = null;
+  let items = [];
+  let activeIndex = -1;
+
+  const closeMenu = () => {
+    menu.style.display = 'none';
+    menu.innerHTML = '';
+    items = [];
+    activeIndex = -1;
+  };
+
+  const pick = (idx) => {
+    const it = items && items[idx] ? items[idx] : null;
+    if (!it) return;
+    input.value = it.label;
+    setPlaceDataset(input, it);
+    closeMenu();
+  };
+
+  const render = (list) => {
+    items = Array.isArray(list) ? list : [];
+    activeIndex = -1;
+    if (!items.length) {
+      menu.innerHTML = `<div class="ac-muted">Sem sugestões</div>`;
+      menu.style.display = 'block';
+      return;
+    }
+    menu.innerHTML = '';
+    items.slice(0, 8).forEach((it, i) => {
+      const row = document.createElement('div');
+      row.className = 'ac-item';
+      row.textContent = it.label;
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // keep focus
+        pick(i);
+      });
+      menu.appendChild(row);
+    });
+    menu.style.display = 'block';
+  };
+
+  const setActive = (idx) => {
+    const rows = menu.querySelectorAll('.ac-item');
+    rows.forEach((r) => r.classList.remove('active'));
+    if (idx >= 0 && idx < rows.length) rows[idx].classList.add('active');
+    activeIndex = idx;
+  };
+
+  const fetchAndRender = async () => {
+    const q = String(input.value || '').trim();
+    if (!q || q.length < 3) {
+      closeMenu();
+      return;
+    }
+    try {
+      const list = await searchPlaces(q, 6);
+      // Only render if input hasn't changed during await
+      const q2 = String(input.value || '').trim();
+      if (q2 !== q) return;
+      render(list);
+    } catch (_) {
+      closeMenu();
+    }
+  };
+
+  input.addEventListener('input', () => {
+    const q = String(input.value || '').trim();
+    if (input.dataset.acLabel && q !== String(input.dataset.acLabel)) {
+      clearPlaceDataset(input);
+    }
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fetchAndRender, 260);
+  });
+
+  input.addEventListener('focus', () => {
+    const q = String(input.value || '').trim();
+    if (q.length >= 3) {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchAndRender, 120);
+    }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (menu.style.display !== 'block') return;
+    const rows = menu.querySelectorAll('.ac-item');
+    if (!rows.length) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = Math.min((activeIndex < 0 ? -1 : activeIndex) + 1, rows.length - 1);
+      setActive(next);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = Math.max((activeIndex < 0 ? rows.length : activeIndex) - 1, 0);
+      setActive(prev);
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (activeIndex >= 0) {
+        e.preventDefault();
+        pick(activeIndex);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      closeMenu();
+    }
+  });
+
+  document.addEventListener('mousedown', (e) => {
+    if (!menu || menu.style.display !== 'block') return;
+    const host = input.closest('.form-group');
+    if (!host) return;
+    if (host.contains(e.target)) return;
+    closeMenu();
+  });
+}
+
+function initRouteAutocomplete() {
+  attachPlaceAutocomplete('route-a');
+  attachPlaceAutocomplete('route-b');
+  attachPlaceAutocomplete('route-waypoint-input');
+}
+
 async function geocodePlace(query) {
   const direct = parseLatLng(query);
   if (direct) return { ...direct, label: query };
 
   const q = String(query || '').trim();
   if (!q) throw new Error('Empty query');
-  const scoped = /rio de janeiro|rj/i.test(q) ? q : `${q}, Rio de Janeiro, Brasil`;
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(scoped)}`;
-  const res = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
-  const json = await res.json();
-  if (!Array.isArray(json) || json.length === 0) {
-    throw new Error('Not found');
+
+  const items = await searchPlaces(q, 1);
+  if (!items || !items[0]) throw new Error('Not found');
+  return { lat: items[0].lat, lng: items[0].lng, label: items[0].label };
+}
+
+async function resolvePlaceFromInput(inputId) {
+  const input = document.getElementById(inputId);
+  const raw = (input ? input.value : '').trim();
+  if (!raw) throw new Error('Empty query');
+
+  const lat = input ? Number(input.dataset.acLat) : NaN;
+  const lng = input ? Number(input.dataset.acLng) : NaN;
+  const label = input ? String(input.dataset.acLabel || '').trim() : '';
+  if (Number.isFinite(lat) && Number.isFinite(lng) && label && label === raw) {
+    return { lat, lng, label: raw };
   }
-  return { lat: parseFloat(json[0].lat), lng: parseFloat(json[0].lon), label: json[0].display_name };
+  return geocodePlace(raw);
 }
 
 async function buildAndDrawRoute() {
@@ -2063,8 +2387,8 @@ async function buildAndDrawRoute() {
 
   showNotif('⏳ Traçando rota...', 2000);
   try {
-    const start = await geocodePlace(a);
-    const end = await geocodePlace(b);
+    const start = await resolvePlaceFromInput('route-a');
+    const end = await resolvePlaceFromInput('route-b');
 
     const wps = [];
     for (const wp of routeWaypoints) {
@@ -2088,6 +2412,7 @@ async function buildAndDrawRoute() {
     const routeGeo = { type: 'Feature', properties: {}, geometry: json.routes[0].geometry };
     routeLayer.clearLayers();
     routeLayer.addData(routeGeo);
+    currentRouteGeometry = json.routes[0].geometry;
 
     routeMarkerGroup.clearLayers();
     L.circleMarker([start.lat, start.lng], { radius: 6, color: '#00ff9d', weight: 2, fillColor: '#00ff9d', fillOpacity: 0.9 })
@@ -2106,14 +2431,172 @@ async function buildAndDrawRoute() {
     const min = Math.round(json.routes[0].duration / 60);
     map.fitBounds(routeLayer.getBounds(), { padding: [20, 20] });
     showNotif(`✅ Rota criada: ${km} km · ${min} min (estimado)`, 3500);
+    updateRouteProximityAlerts();
   } catch (e) {
     showNotif('⚠️ Falha ao traçar rota. Verifique os nomes dos locais.', 4000, '#ffd700');
   }
 }
 
+function latLngToMercatorMeters(lat, lng) {
+  const R = 6378137;
+  const rad = Math.PI / 180;
+  const x = R * (lng * rad);
+  const y = R * Math.log(Math.tan(Math.PI / 4 + (lat * rad) / 2));
+  return { x, y };
+}
+
+function distPointToSegmentSqMeters(p, a, b) {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const apx = p.x - a.x;
+  const apy = p.y - a.y;
+  const ab2 = abx * abx + aby * aby;
+  if (ab2 <= 0) {
+    const dx = p.x - a.x;
+    const dy = p.y - a.y;
+    return dx * dx + dy * dy;
+  }
+  let t = (apx * abx + apy * aby) / ab2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = a.x + t * abx;
+  const cy = a.y + t * aby;
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+  return dx * dx + dy * dy;
+}
+
+function minDistSqToPolylineMeters(p, line) {
+  if (!Array.isArray(line) || line.length < 2) return Infinity;
+  let best = Infinity;
+  for (let i = 0; i < line.length - 1; i++) {
+    const d2 = distPointToSegmentSqMeters(p, line[i], line[i + 1]);
+    if (d2 < best) best = d2;
+    if (best === 0) return 0;
+  }
+  return best;
+}
+
+function setMarkerRouteNear(marker, near) {
+  if (!marker) return;
+  const el = marker.getElement ? marker.getElement() : null;
+  if (!el) return;
+  const pin = el.querySelector ? el.querySelector('.custom-pin') : null;
+  if (!pin) return;
+  pin.classList.toggle('pin-route-near', !!near);
+}
+
+function clearRouteProximityAlerts() {
+  routeNearbyMarkers.forEach((m) => setMarkerRouteNear(m, false));
+  routeNearbyMarkers = [];
+  const panel = document.getElementById('route-alerts');
+  if (panel) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+  }
+}
+
+function hideRouteAlerts() {
+  clearRouteProximityAlerts();
+}
+
+function extractRouteLatLngs(geometry) {
+  if (!geometry || !geometry.type || !geometry.coordinates) return null;
+  const coords = geometry.type === 'LineString'
+    ? geometry.coordinates
+    : (geometry.type === 'MultiLineString' ? (geometry.coordinates[0] || []) : []);
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  return coords.map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }))
+    .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+}
+
+function updateRouteProximityAlerts() {
+  clearRouteProximityAlerts();
+  if (!currentRouteGeometry) return;
+
+  const routePtsLatLng = extractRouteLatLngs(currentRouteGeometry);
+  if (!routePtsLatLng || routePtsLatLng.length < 2) return;
+
+  const routePts = routePtsLatLng.map(p => latLngToMercatorMeters(p.lat, p.lng));
+  const thresholdM = 300;
+  const thresholdSq = thresholdM * thresholdM;
+
+  const hits = [];
+  (markers || []).forEach((m) => {
+    const ll = m && m.getLatLng ? m.getLatLng() : null;
+    if (!ll) return;
+    const p = latLngToMercatorMeters(ll.lat, ll.lng);
+    const d2 = minDistSqToPolylineMeters(p, routePts);
+    if (d2 <= thresholdSq) {
+      routeNearbyMarkers.push(m);
+      setMarkerRouteNear(m, true);
+      const oc = m._oc || null;
+      const cfg = oc ? getTypeConfigFromOc(oc) : { label: 'Ocorrência', icon: '⚠️', color: '#ffd700' };
+      hits.push({
+        marker: m,
+        oc,
+        cfg,
+        distM: Math.round(Math.sqrt(d2))
+      });
+    }
+  });
+
+  const panel = document.getElementById('route-alerts');
+  if (!panel) return;
+  if (hits.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  hits.sort((a, b) => a.distM - b.distM);
+
+  panel.innerHTML = `
+    <div class="ra-head">
+      <div class="ra-title">Ocorrências próximas da rota (${hits.length}) · até ${thresholdM}m</div>
+      <button class="ra-close" onclick="hideRouteAlerts()">Fechar</button>
+    </div>
+    <div class="ra-body"></div>
+  `;
+
+  const body = panel.querySelector('.ra-body');
+  hits.slice(0, 25).forEach((h) => {
+    const oc = h.oc || {};
+    const local = oc.local || 'Local não informado';
+    const when = (oc.data ? normalizeDateToPt(oc.data) : '--') + (oc.hora ? ` ${oc.hora}` : '');
+    const row = document.createElement('div');
+    row.className = 'ra-item';
+    row.innerHTML = `
+      <div class="ra-ic">${h.cfg.icon}</div>
+      <div class="ra-main">
+        <div class="ra-line1" style="color:${h.cfg.color};">${h.cfg.label} · ~${h.distM}m</div>
+        <div class="ra-line2">${local} · ${when}</div>
+      </div>
+    `;
+    row.onclick = () => {
+      try {
+        const ll = h.marker.getLatLng();
+        map.flyTo(ll, Math.max(map.getZoom(), 15), { duration: 0.8 });
+        h.marker.openPopup();
+        if (h.oc) showOcorrenciaDetail(h.oc);
+      } catch (_) {}
+    };
+    body.appendChild(row);
+  });
+
+  if (hits.length > 25) {
+    const more = document.createElement('div');
+    more.className = 'ac-muted';
+    more.textContent = `+ ${hits.length - 25} ocorrências (refine filtros para listar menos)`;
+    body.appendChild(more);
+  }
+
+  panel.style.display = 'block';
+}
+
 function clearRoute() {
   if (routeLayer) routeLayer.clearLayers();
   if (routeMarkerGroup) routeMarkerGroup.clearLayers();
+  currentRouteGeometry = null;
+  clearRouteProximityAlerts();
   showNotif('🧹 Rota limpa', 2000);
 }
 
@@ -3846,8 +4329,15 @@ function restoreData() {
 //  INIT
 // ══════════════════════════════════════════
 (function attachGeoCacheImportHandler() {
-  const input = document.getElementById('geo-cache-import');
-  if (!input) return;
+  let input = document.getElementById('geo-cache-import');
+  if (!input) {
+    input = document.createElement('input');
+    input.id = 'geo-cache-import';
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+  }
   input.addEventListener('change', () => {
     const f = input.files && input.files[0] ? input.files[0] : null;
     if (!f) return;
@@ -3862,6 +4352,7 @@ function restoreData() {
   initDateFilter();
   updateSupabaseStatus();
   updateGeocodeCacheStatus();
+  initRouteAutocomplete();
 
   // Default: show only today's occurrences to keep initial load light
   setFilterToday();
