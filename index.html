@@ -1396,8 +1396,10 @@ const SHEETS_CONFIG = {
   // Option B: Published CSV (or local CSV file when served by HTTP)
   csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSUqNUL5E09AwkK_q40OWB4XUlw_w39YUCMe-Ese9vXJYSlGVscNp3ofOV7vkuv5EJFslMbzM7gFKGI/pub?output=csv',
   useProxy: false,
-  refreshMs: 15000,
+  // Google serves the published CSV with a 5-minute cache, so faster polling adds no freshness.
+  refreshMs: 60000,
 };
+const sheetsEnabled = (SHEETS_CONFIG.apiKey && SHEETS_CONFIG.sheetId) || SHEETS_CONFIG.csvUrl;
 
 // ══════════════════════════════════════════
 //  EXTERNAL ALERTS (MOVI-ALERT via local proxy)
@@ -1637,6 +1639,10 @@ let currentRouteGeometry = null;
 let routeNearbyMarkers = [];
 let isGeocoding = false;
 let geoWarned = false;
+let geoProgressNotified = false;
+const geoNotFound = new Set(); // addresses with no result in this session: do not retry them
+let sheetLoadInFlight = false;
+let lastSheetCsvText = null;
 let geoProxySkipUntil = new Map();
 let moviWarned = false;
 let moviSkipUntilTs = 0;
@@ -1652,16 +1658,24 @@ const map = L.map('map', {
 
 // Base layers (dark/light)
 let mapTheme = 'dark';
-const baseLayerDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '© OpenStreetMap © CARTO',
-  subdomains: 'abcd',
-  maxZoom: 19
-});
-const baseLayerLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '© OpenStreetMap © CARTO',
-  subdomains: 'abcd',
-  maxZoom: 19
-});
+function createBaseLayer(theme) {
+  const isLight = theme === 'light';
+  const key = String((window.APP_CONFIG && window.APP_CONFIG.map && window.APP_CONFIG.map.cartoKey) || '').trim();
+  if (key) {
+    return L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/${isLight ? 'light_all' : 'dark_all'}/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(key)}`, {
+      attribution: '© OpenStreetMap contributors, © CARTO',
+      maxNativeZoom: 18,
+      maxZoom: 20
+    });
+  }
+  return L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${isLight ? 'Light' : 'Dark'}_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
+    attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
+    maxNativeZoom: 16,
+    maxZoom: 19
+  });
+}
+const baseLayerDark = createBaseLayer('dark');
+const baseLayerLight = createBaseLayer('light');
 baseLayerDark.addTo(map);
 
 function applyMapTheme(next) {
@@ -1886,7 +1900,7 @@ function renderOcorrencias() {
       if (dateFilter.onlySheets && oc._source !== 'sheets') return false;
       const parts = getOcDateParts(oc);
       if (!parts) return false;
-      return parts.month === monthRef;
+      return parts.month === monthRef && parts.year === String(new Date().getFullYear());
     }).length;
   }
   document.getElementById('stat-total').textContent = totalForStat;
@@ -3923,6 +3937,7 @@ async function geocodeAddress(addr) {
     });
   }
   if (GEO_CONFIG.tryDirect) candidates.push(baseUrl);
+  let unreachable = candidates.length === 0;
   for (const url of candidates) {
     const skipKey =
       (typeof url === 'string' && url.includes('127.0.0.1:8787')) ? '__local_proxy__' :
@@ -3944,13 +3959,17 @@ async function geocodeAddress(addr) {
         continue;
       }
       const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) continue;
+      if (!Array.isArray(data) || data.length === 0) {
+        geoNotFound.add(normalizeAddressKey(addr));
+        return null;
+      }
       const hit = data[0];
       const lat = parseFloat(hit.lat);
       const lng = parseFloat(hit.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
       return { lat, lng, display: hit.display_name || '' };
     } catch (e) {
+      unreachable = true;
       // Evita spam de erros quando o proxy local não está rodando
       if (typeof url === 'string' && url.includes('127.0.0.1:8787')) {
         geoProxySkipUntil.set('__local_proxy__', Date.now() + 60_000);
@@ -3960,12 +3979,12 @@ async function geocodeAddress(addr) {
       continue;
     }
   }
-  if (!geoWarned) {
+  if (unreachable && !geoWarned) {
     geoWarned = true;
     const hint = isLocalhostEnv()
       ? 'Inicie o proxy local: node geocode-proxy.js (porta 8787).'
-      : 'Em produção (GitHub), configure um proxy CORS em window.APP_CONFIG.geo.proxyUrls.';
-    showNotif(`⚠️ Geocodificação bloqueada por CORS. ${hint}`, 7500, '#ffd700');
+      : 'Os pins sem coordenada ficam na posição aproximada da zona.';
+    showNotif(`⚠️ Serviço de geocodificação indisponível. ${hint}`, 7500, '#ffd700');
   }
   return null;
 }
@@ -3976,9 +3995,12 @@ async function geocodeOcorrencias(list) {
   isGeocoding = true;
   try {
     const cache = loadGeocodeCache();
-    const queue = list.filter(oc => !(Number.isFinite(oc.lat) && Number.isFinite(oc.lng)));
+    const queue = list.filter(oc => !(Number.isFinite(oc.lat) && Number.isFinite(oc.lng)) && !geoNotFound.has(normalizeAddressKey(buildAddressFromOc(oc))));
     if (queue.length === 0) return;
-    showNotif(`🧭 Geocodificando ${Math.min(queue.length, GEO_CONFIG.maxPerSync)} endereços...`, 2500);
+    if (!geoProgressNotified) {
+      geoProgressNotified = true;
+      showNotif(`🧭 Geocodificando ${Math.min(queue.length, GEO_CONFIG.maxPerSync)} endereços...`, 2500);
+    }
     const seen = new Set();
     let updated = 0;
     let processed = 0;
@@ -4005,14 +4027,23 @@ async function geocodeOcorrencias(list) {
         oc.lat = res.lat;
         oc.lng = res.lng;
         cache[key] = { lat: res.lat, lng: res.lng, ts: Date.now() };
+        saveGeocodeCache(cache);
         updated++;
       }
     }
     if (updated > 0) {
       saveGeocodeCache(cache);
+      // Rows sharing an address were skipped above, so give them the coordinates too.
+      list.forEach((oc) => {
+        if (Number.isFinite(oc.lat) && Number.isFinite(oc.lng)) return;
+        const hit = cache[normalizeAddressKey(buildAddressFromOc(oc))];
+        if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lng)) {
+          oc.lat = hit.lat;
+          oc.lng = hit.lng;
+        }
+      });
       updateGeocodeCacheStatus();
       renderOcorrencias();
-      showNotif(`✅ ${updated} endereços geocodificados`, 2500);
     }
   } finally {
     isGeocoding = false;
@@ -4189,10 +4220,12 @@ function syncNow() {
     return;
   }
   showNotif('⏳ Sincronizando agora...', 2000);
-  loadSheetData();
+  loadSheetData({ manual: true });
 }
 
-async function loadSheetData() {
+async function loadSheetData({ manual = false } = {}) {
+  if (sheetLoadInFlight) return;
+  sheetLoadInFlight = true;
   try {
     if (location.protocol === 'file:') {
       showNotif('⚠️ Abra via servidor local para carregar dados externos/CSV.', 5000, '#ffd700');
@@ -4248,6 +4281,13 @@ async function loadSheetData() {
         if (!res2.ok) throw new Error('GVIZ fetch failed');
         text = await res2.text();
       }
+      if (text === lastSheetCsvText) {
+        if (manual) showNotif('✅ Planilha sem alterações');
+        geocodeOcorrencias(ocorrencias);
+        return;
+      }
+      const isFirstLoad = lastSheetCsvText === null;
+      lastSheetCsvText = text;
       Papa.parse(text, {
         header: true,
         skipEmptyLines: true,
@@ -4255,12 +4295,14 @@ async function loadSheetData() {
           const rows = results.data || [];
           const headers = (results.meta && results.meta.fields) ? results.meta.fields : (rows[0] ? Object.keys(rows[0]) : []);
           setOcorrenciasFromSheet(rows, headers);
-          showNotif(`✅ ${rows.length} ocorrências carregadas do CSV`);
+          showNotif(isFirstLoad ? `✅ ${rows.length} ocorrências carregadas do CSV` : `🔄 Planilha atualizada: ${rows.length} ocorrências`);
         }
       });
     }
   } catch (e) {
     showNotif('⚠️ Falha ao carregar dados da planilha.', 4000, '#ffd700');
+  } finally {
+    sheetLoadInFlight = false;
   }
 }
 
@@ -4357,11 +4399,10 @@ function restoreData() {
   // Default: show only today's occurrences to keep initial load light
   setFilterToday();
 
-  const sheetsEnabled = (SHEETS_CONFIG.apiKey && SHEETS_CONFIG.sheetId) || SHEETS_CONFIG.csvUrl;
   if (sheetsEnabled) {
     loadSheetData();
     if (SHEETS_CONFIG.refreshMs > 0) {
-      setInterval(loadSheetData, SHEETS_CONFIG.refreshMs);
+      setInterval(() => loadSheetData(), SHEETS_CONFIG.refreshMs);
     }
   } else {
     restoreData();
